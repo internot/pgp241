@@ -1,0 +1,63 @@
+<html>
+    <head>
+        <title>Two For One</title>
+        <script src="openpgp.js"></script>
+        <link rel="stylesheet" href=".css" type="text/css" />
+        <!--script src="../integrity/test.js"></script-->
+    </head>
+    <body>
+        <table>
+            <tr>
+                <td><textarea id="pubkey1" class="block" placeholder="public key 1"></textarea></td>
+                <td><button id="genasymkey">&lt;- Generate asymmetric keys -&gt;</button></td>
+                <td><textarea id="pubkey2" class="block" placeholder="public key 2"></textarea></td>
+            </tr>
+            <tr class="space"></tr>
+            <!--tr>
+                <td><input type="text" id="symkey1" placeholder="symmetric key 1"/></td>
+                <td><button id="gensymkey">&lt;- Generate symmetric keys -&gt;</button></td>
+                <td><input type="text" id="symkey2" placeholder="symmetric key 2"/></td>
+            </tr>
+            <tr>
+                <td><input type="text" id="iv1" placeholder="initialization vector 1"/></td>
+                <td></td>
+                <td><input type="text" id="iv2" placeholder="initialization vector 2"/></td>
+            </tr>
+            <tr class="space"></tr-->
+            <tr>
+                <td><textarea id="message1" placeholder="message 1"></textarea></td>
+                <td><div id="messageinfo"></div></td>
+                <td><textarea id="message2" placeholder="message 2"></textarea></td>
+            </tr>
+            <tr class="space"></tr>
+            <tr>
+                <td></td>
+                <td><button id="encrypt">Encrypt</button></td>
+                <td></td>
+            </tr>
+            <tr class="space"></tr>
+            <tr>
+                <td></td>
+                <td><textarea id="pgpmessage" class="block" placeholder="PGP message"></textarea></td>
+                <td></td>
+            </tr>
+            <tr class="space"></tr>
+            <tr>
+                <td></td>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td><textarea id="privkey1" class="block" placeholder="private key 1"></textarea></td>
+                <td><button id="decrypt">Decrypt</button></td>
+                <td><textarea id="privkey2" class="block" placeholder="private key 2"></textarea></td>
+            </tr>
+            <tr>
+                <td><input id="decrypted1" placeholder="decrypted message 1"></textarea></td>
+                <td></td>
+                <td><input id="decrypted2" placeholder="decrypted message 2"></textarea></td>
+            </tr>
+        </table>
+        <script src="twoforone.js"></script>
+    </body>
+</html>
