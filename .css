@@ -1,0 +1,25 @@
+input, textarea {
+    width: 500px;
+}
+
+.block {
+    height: 300px;
+}
+
+.space {
+    height: 30px;
+}
+
+button {
+    display: block;
+    margin: auto;
+}
+
+td {
+    width: 33%;
+}
+
+table {
+    width: 75%;
+    margin: auto;
+}
