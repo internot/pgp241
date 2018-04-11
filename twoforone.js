@@ -143,11 +143,8 @@ var twoforone = function() {
         list.push(se);
         
         console.log("Encrypt symmetric keys");
-        var x=await openpgp.message.encryptSessionKey(keys[0].K, 'aes256', [pubkey1]);
         list.concat((await openpgp.message.encryptSessionKey(keys[0].K, 'aes256', [pubkey1])).packets);
         list.concat((await openpgp.message.encryptSessionKey(keys[1].K, 'aes256', [pubkey2])).packets);
-        
-        console.log("Compose PGP message packets");
         
         console.log("Armor PGP message");
         
@@ -191,8 +188,6 @@ var twoforone = function() {
 }()
 
 document.getElementById("genasymkey").addEventListener("click", twoforone.genAsymKeys);
-
-document.getElementById("gensymkey").addEventListener("click", twoforone.genSymKeys);
 
 document.getElementById("encrypt").addEventListener("click", twoforone.encrypt);
 
