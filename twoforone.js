@@ -22,7 +22,6 @@ var twoforone = function() {
     }
     
     async function findKeys() {
-        console.log("Making secret sauce");
         
         var time = new Date(),
             zero = new Uint8Array(16), // Zero vector
@@ -74,11 +73,6 @@ var twoforone = function() {
                                     'c\': ' + [c0[14], c0[15], c0[16], c0[17], o1[0], o1[1]] + '\n' +
                                     'Stats: ' + i + ' iterations in ' + (new Date() - time) + ' ms');
                         
-                        document.getElementById("symkey1").value = openpgp.util.Uint8Array_to_hex(m.K);
-                        document.getElementById("symkey2").value = openpgp.util.Uint8Array_to_hex(K);
-                        document.getElementById("iv1").value = openpgp.util.Uint8Array_to_hex(m.o0); // m.o0.map((x,i)=>x^c0[i]));
-                        document.getElementById("iv2").value = openpgp.util.Uint8Array_to_hex(o0); // o0.map((x,i)=>x^c0[i]));
-                        
                         return [m, h[c0[16]][c0[17]][o1[0]][o1[1]]];
                     }
                 }
@@ -89,7 +83,6 @@ var twoforone = function() {
     }
 
     async function encrypt() {
-        console.log('Making more secret sauce');
         
         var pubkey1 = openpgp.key.readArmored(document.getElementById("pubkey1").value).keys[0],
             pubkey2 = openpgp.key.readArmored(document.getElementById("pubkey2").value).keys[0],
