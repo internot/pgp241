@@ -5,7 +5,11 @@ try {
 openpgp.config.ignore_mdc_error = true;
 
 var twoforone = function() {
-
+    
+    var zero = new Uint8Array(16), // Zero vector
+        E = new openpgp.crypto.cipher.aes256(new Uint8Array(32)), // Encryption function
+        c0; // Randomly chosen first block of cipher text
+    
     function genAsymKeys() {
         openpgp.generateKey({
             userIds: [{ name:'Jonas', email:'jonas@assured.se' }]
@@ -21,121 +25,155 @@ var twoforone = function() {
         });
     }
     
-    async function findKeys() {
+    function findKeys(extended) {
         
         var time = new Date(),
-            zero = new Uint8Array(16), // Zero vector
-            E = new openpgp.crypto.cipher.aes256(zero), // Encryption function
-            K, // Random key
             o0, // 0th output block
             o1, // 1st output block
-            c0 = new Uint8Array(18), // Randomly chosen first block of cipher text
-            h = {}, // Candidates
-            m; // Match!
-    
-        try {
+            h = {}; // Candidates
             
-            console.log("Randomly choose first cipher block");
-            // Optimization that reduces the number of AES operations
-            // c0 = zero.slice(0); // await openpgp.crypto.random.getRandomBytes(16);
+        E.key = new Uint8Array(32);
+    
+        console.log("Generate keys until a matching pair has been found");
+
+        for (var i = 0; i < Math.pow(2,25); i++) {
             
-            console.log("Generate keys until a matching pair has been found");
-    
-            for (var i = 0; i < Math.pow(2,16); i++) {
-                K = E.key = await openpgp.crypto.random.getRandomBytes(32);
-                o0 = E.encrypt(zero);
-                o1 = o0;// (new openpgp.crypto.cipher.aes256(K)).encrypt(c0);
-                
-                c0[16] = o0[14]^o1[0]; // c0[14]^o0[14]^o1[0];
-                c0[17] = o0[15]^o1[1]; // c0[15]^o0[15]^o1[1];
-                
-                // Resynch step
-                o1 = E.encrypt(c0.subarray(2));
-                
-                // The following line is hideous! :)
-                (((h[c0[16]] = {...h[c0[16]]})
-                    [c0[17]] = {...h[c0[16]][c0[17]]})
-                    [o1[0]] = {...h[c0[16]][c0[17]][o1[0]]})
-                    [o1[1]] = {'K': K, 'o0': o0, 'o1': o1};
-                
-                for (var n in h[c0[16]][c0[17]][o1[0]^11^10]) {
-    
-                    if (((n ^ o1[1]) & 0xc0) == 0x80) {
-                        m = h[c0[16]][c0[17]][o1[0]^11^10][n];
-                        console.log('Sooouuper JACKPOT!\n' +
-                                    'K0: ' + openpgp.util.Uint8Array_to_hex(m.K) + '\n' +
-                                    'o:  ' + [m.o0[14], m.o0[15], m.o0[0], m.o0[1], m.o1[0], m.o1[1]] + '\n' +
-                                    'p:  ' + [c0[14] ^ m.o0[14], c0[15] ^ m.o0[15], c0[16] ^ m.o0[0], c0[17] ^ m.o0[1], o1[0] ^ m.o1[0], o1[1] ^ m.o1[1]] + '\n' +
-                                    'c:  ' + [c0[14], c0[15], c0[16], c0[17], o1[0], o1[1]] + '\n' +
-                                    'K1: ' + openpgp.util.Uint8Array_to_hex(K) + '\n' +
-                                    'o\': ' + [o0[14], o0[15], o0[0], o0[1], o1[0], o1[1]] + '\n' +
-                                    'p\': ' + [c0[14] ^ o0[14], c0[15] ^ o0[15], c0[16] ^ o0[0], c0[17] ^ o0[1], 0, 0] + '\n' + 
-                                    'c\': ' + [c0[14], c0[15], c0[16], c0[17], o1[0], o1[1]] + '\n' +
-                                    'Stats: ' + i + ' iterations in ' + (new Date() - time) + ' ms');
-                        
-                        return [m, h[c0[16]][c0[17]][o1[0]][o1[1]]];
-                    }
-                }
+            var n = 0,
+                n_ = 0;
+            
+            initKey(E.key, i);
+
+            // This is the proper way to do it. It can be optimised.
+
+            o0 = E.encrypt(zero);
+            o1 = E.encrypt(c0.subarray(0, 16));
+            
+            c0[16] = c0[14] ^ o0[14] ^ o1[0];
+            c0[17] = c0[15] ^ o0[15] ^ o1[1];
+            
+            // Resync step
+            o1 = E.encrypt(c0.subarray(2));
+            
+            n = (c0[16]<<24) | (c0[17]<<16) | (o1[0]<<8) | o1[1];
+            n_ = (c0[16]<<24) | (c0[17]<<16) | ((o1[0]^1)<<8) | o1[1];
+
+            // This handles when messages have two vs three octet lengths 
+            if (extended[0]) {
+                n = n * 256 + o1[2];
+                n_ = n_ * 256 + (o1[2] ^ 7);
+            } else {
+                n_ ^= extended[1] ? 5 : 2;
             }
-        } catch(e) {
-            console.log(e);
+            h[n] = i;
+            
+            if (h[n_] !== undefined) {
+            
+                console.log('Sooouuper JACKPOT!\n' +
+                            'K0: ' + h[n_] + '\n' +
+                            'K1: ' + i + '\n' +
+                            'Stats: ' + i + ' iterations in ' + (new Date() - time) + ' ms');
+                
+                return [
+                    initKey(new Uint8Array(32), h[n_]), 
+                    initKey(new Uint8Array(32), i)
+                ];
+            }
         }
+    }
+    
+    function initKey(k, i) {
+        
+        var j = 0;
+        while (i >>> j*8 > 0) {
+            k[j] = i >>> j++ * 8 & 0xff;
+        }
+        return k;
+    }
+    
+    function initIV(k) {
+        var E = new openpgp.crypto.cipher.aes256(k);
+        var iv = E.encrypt(zero);
+        for (var i = 0; i < 16; i++) {
+            iv[i] ^= c0[i];
+        }
+        return iv;
+    }
+    
+    function writeHeader(type, length) {
+        
+        if (length < 192)
+            return new Uint8Array([0xc0 | type, length]);
+        else
+            return new Uint8Array([0xc0 | type, ((length - 192) >> 8) + 192, (length - 192) & 0xFF]);
     }
 
     async function encrypt() {
         
-        var pubkey1 = openpgp.key.readArmored(document.getElementById("pubkey1").value).keys[0],
-            pubkey2 = openpgp.key.readArmored(document.getElementById("pubkey2").value).keys[0],
-            message1 = document.getElementById("message1").value,
-            message2 = document.getElementById("message2").value,
-            encrypted;
-
-        // TODO: More flexibility by finding keys that better fit the message lengths
-        var keys = await findKeys();
+        var pubkey = [
+                openpgp.key.readArmored(document.getElementById("pubkey1").value).keys[0],
+                openpgp.key.readArmored(document.getElementById("pubkey2").value).keys[0]
+            ],
+            message = [
+                document.getElementById("message1").value,
+                document.getElementById("message2").value
+            ];
             
+        // Shortest length first
+        if (message[0].length > message[1].length) {
+            message = [message[1], message[0]];
+            pubkey = [pubkey[1], pubkey[0]];
+        }
+        
+        // 2 + 1 + 1 + pad + 4 + message[0].length + 2 == full block
+        var extended = [];
+        extended[1] =     1 + 1 + 6 + 4 + message[1].length > 191;
+        extended[0] = 2 + 1 + 1 + 1 + 4 + message[0].length + 2 + extended[1] > 192;
+
+        // We don't need to generate a new C0, we could just use a known collision
+        c0 = await openpgp.crypto.random.getRandomBytes(18);
+        
+        var K = findKeys(extended);
+        
         console.log("Prepare first message");
         
-        // [tag,length,'u',length,'msg.txt',date,data]
+        // [tag,length,'u',length,'msg.txt',date,msg]
 
-        var length1 = message1.length + 13,
-            length2 = length1 ^ keys[0].o1[1] ^ keys[1].o1[1],
-            blocks = Math.floor((length2 + 2) / 16),
-            dummy1Length = blocks * 16 - length1 - 6,
-            overflow = (length2 + 2) % 16,
-            dummy2Length = overflow + message2.length + 15;
-        
-        console.log(length1, length2);
-    
+        var pad = 16 - (10 + extended[0] + extended[1] + message[0].length) % 16,
+            length = [
+                message[0].length + 6 + pad,
+                message[1].length + 6 + 6
+            ];
+
         var literal = new openpgp.packet.Literal();
-        literal.setText(message1);
-        message1 = openpgp.util.concatUint8Array([
-            new Uint8Array([0xcb, length1]), 
-            literal.write(), 
-            new Uint8Array([0xca,dummy1Length]),
-            await openpgp.crypto.random.getRandomBytes(dummy1Length), 
-            new Uint8Array([0xca, dummy2Length])
+        literal.setText(message[0]);
+        literal.setFilename('easter.egg.hunt.'.substr(0, pad));
+        
+        message[0] = openpgp.util.concatUint8Array([
+            writeHeader(openpgp.enums.packet.literal, length[0]), 
+            literal.write(),
+            writeHeader(openpgp.enums.packet.marker, length[1] + 2 + extended[1])
         ]);
-        // Let's see which tag works best
         
         console.log("Encrypt first message");
         
-        encrypted = openpgp.crypto.cfb.encrypt(keys[0].o0, 'aes256', message1, keys[0].K, true);
+        var encrypted = openpgp.crypto.cfb.encrypt( initIV(K[0]), 'aes256', message[0], K[0], true );
         
         console.log("Prepare second message");
         
-        literal.setText(message2);
-        message2 = openpgp.util.concatUint8Array([
-            await openpgp.crypto.random.getRandomBytes(overflow), 
-            new Uint8Array([0xcb, message2.length + 15]), 
-            literal.write()]);
-        
-        encrypted = openpgp.util.concatUint8Array([encrypted,
-            openpgp.crypto.cfb.normalEncrypt('aes256', keys[1].K, message2, encrypted.subarray(-16))]);
+        literal.setText(message[1]);
+        literal.setFilename('PGP241');
+        message[1] = openpgp.util.concatUint8Array([
+            writeHeader(openpgp.enums.packet.literal, length[1]), 
+            literal.write()
+        ]);
         
         console.log("Encrypt second message");
-        
-        console.log("Concatenate ciphertexts");
     
+        encrypted = openpgp.util.concatUint8Array([
+            encrypted,
+            openpgp.crypto.cfb.normalEncrypt( 'aes256', K[1], message[1], encrypted.subarray(-16))
+        ]);
+        
         var list = new openpgp.packet.List();
         
         var se = new openpgp.packet.SymmetricallyEncrypted();
@@ -143,8 +181,9 @@ var twoforone = function() {
         list.push(se);
         
         console.log("Encrypt symmetric keys");
-        list.concat((await openpgp.message.encryptSessionKey(keys[0].K, 'aes256', [pubkey1])).packets);
-        list.concat((await openpgp.message.encryptSessionKey(keys[1].K, 'aes256', [pubkey2])).packets);
+        
+        list.concat((await openpgp.message.encryptSessionKey(K[0], 'aes256', [pubkey[0]])).packets);
+        list.concat((await openpgp.message.encryptSessionKey(K[1], 'aes256', [pubkey[1]])).packets);
         
         console.log("Armor PGP message");
         
@@ -152,7 +191,7 @@ var twoforone = function() {
         
     }
     
-    function decrypt(){
+    async function decrypt(){
         console.log("Decrypting message");
         
         var privkey1 = document.getElementById("privkey1").value,
@@ -162,20 +201,16 @@ var twoforone = function() {
         if (pgpmessage.length > 0) {
             
             console.log("Decrypting first message");
-            openpgp.decrypt({
+            document.getElementById("decrypted1").value = (await openpgp.decrypt({
                 message: openpgp.message.readArmored(pgpmessage),
                 privateKeys: openpgp.key.readArmored(privkey1).keys
-            }).then(function(plaintext) {
-                document.getElementById("decrypted1").value = plaintext.data;
-            });
+            })).data;
             
             console.log("Decrypting second message");
-            openpgp.decrypt({
+            document.getElementById("decrypted2").value = (await openpgp.decrypt({
                 message: openpgp.message.readArmored(pgpmessage),
                 privateKeys: openpgp.key.readArmored(privkey2).keys
-            }).then(function(plaintext) {
-                document.getElementById("decrypted2").value = plaintext.data;
-            });
+            })).data;
         }
     }
     
@@ -184,8 +219,8 @@ var twoforone = function() {
         'genSymKeys': findKeys,
         'encrypt': encrypt,
         'decrypt': decrypt
-    }
-}()
+    };
+}();
 
 document.getElementById("genasymkey").addEventListener("click", twoforone.genAsymKeys);
 
