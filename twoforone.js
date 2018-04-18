@@ -56,7 +56,7 @@ var twoforone = function() {
             o1 = E.encrypt(c0.subarray(2));
             
             n = (c0[16]<<24) | (c0[17]<<16) | (o1[0]<<8) | o1[1];
-            n_ = n ^ 0x700;
+            n_ = n ^ 0x100;
 
             // This handles when messages have two vs three octet lengths 
             if (extended[0]) {
@@ -163,14 +163,14 @@ var twoforone = function() {
         
         var list = new openpgp.packet.List();
         
-        var se = new openpgp.packet.SymmetricallyEncrypted();
-        se.encrypted = encrypted;
-        list.push(se);
-        
         console.log("Encrypt symmetric keys");
         
         list.concat((await openpgp.message.encryptSessionKey(K[0], 'aes256', [pubkey[0]])).packets);
         list.concat((await openpgp.message.encryptSessionKey(K[1], 'aes256', [pubkey[1]])).packets);
+        
+        var se = new openpgp.packet.SymmetricallyEncrypted();
+        se.encrypted = encrypted;
+        list.push(se);
         
         console.log("Armor PGP message");
         
