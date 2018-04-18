@@ -7,7 +7,6 @@ openpgp.config.ignore_mdc_error = true;
 var twoforone = function() {
     
     var zero = new Uint8Array(16), // Zero vector
-        E = new openpgp.crypto.cipher.aes256(new Uint8Array(32)), // Encryption function
         c0; // Randomly chosen first block of cipher text
     
     function genAsymKeys() {
@@ -25,14 +24,16 @@ var twoforone = function() {
         });
     }
     
-    function findKeys(extended) {
+    async function findKeys(extended) {
         
         var time = new Date(),
+            E = new openpgp.crypto.cipher.aes256(new Uint8Array(32)), // Encryption function
             o0, // 0th output block
             o1, // 1st output block
             h = {}; // Candidates
-            
-        E.key = new Uint8Array(32);
+        
+        // We don't need to generate a new C0, we could just use a known collision
+        c0 = await openpgp.crypto.random.getRandomBytes(18);
     
         console.log("Generate keys until a matching pair has been found");
 
@@ -41,7 +42,7 @@ var twoforone = function() {
             var n = 0,
                 n_ = 0;
             
-            initKey(E.key, i);
+            E.key = await openpgp.crypto.random.getRandomBytes(32);
 
             // This is the proper way to do it. It can be optimised.
 
@@ -55,7 +56,7 @@ var twoforone = function() {
             o1 = E.encrypt(c0.subarray(2));
             
             n = (c0[16]<<24) | (c0[17]<<16) | (o1[0]<<8) | o1[1];
-            n_ = (c0[16]<<24) | (c0[17]<<16) | ((o1[0]^1)<<8) | o1[1];
+            n_ = n ^ 0x700;
 
             // This handles when messages have two vs three octet lengths 
             if (extended[0]) {
@@ -64,30 +65,19 @@ var twoforone = function() {
             } else {
                 n_ ^= extended[1] ? 5 : 2;
             }
-            h[n] = i;
+            
+            h[n] = E.key;
             
             if (h[n_] !== undefined) {
             
                 console.log('Sooouuper JACKPOT!\n' +
                             'K0: ' + h[n_] + '\n' +
-                            'K1: ' + i + '\n' +
+                            'K1: ' + h[n] + '\n' +
                             'Stats: ' + i + ' iterations in ' + (new Date() - time) + ' ms');
                 
-                return [
-                    initKey(new Uint8Array(32), h[n_]), 
-                    initKey(new Uint8Array(32), i)
-                ];
+                return [ h[n_], h[n] ];
             }
         }
-    }
-    
-    function initKey(k, i) {
-        
-        var j = 0;
-        while (i >>> j*8 > 0) {
-            k[j] = i >>> j++ * 8 & 0xff;
-        }
-        return k;
     }
     
     function initIV(k) {
@@ -128,11 +118,8 @@ var twoforone = function() {
         var extended = [];
         extended[1] =     1 + 1 + 6 + 4 + message[1].length > 191;
         extended[0] = 2 + 1 + 1 + 1 + 4 + message[0].length + 2 + extended[1] > 192;
-
-        // We don't need to generate a new C0, we could just use a known collision
-        c0 = await openpgp.crypto.random.getRandomBytes(18);
         
-        var K = findKeys(extended);
+        var K = await findKeys(extended);
         
         console.log("Prepare first message");
         
