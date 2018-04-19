@@ -1,3 +1,0 @@
-- DiffChain section expansion by proofs on what document insiders can do.
-- Less leaps in proof (HKDF).
-- Separate concrete primitives from abstract assumptions on primitives.	
