@@ -116,7 +116,7 @@ the following block to be scrambled. If the modified block is the last
 block of the sequence, there will be no block to scramble.
 
 
-\subsection{The PGP message format}
+\subsection{The OpenPGP message format}
 
 A PGP message consists of a set of packets. Each packet has a header consisting 
 of a one byte tag and a variable
@@ -144,7 +144,7 @@ key, the first packet is the Marker-packet and the second the Literal packet.
 Since, upon decryption, the Marker-packet will be ignored, only the contents of the Literal-packet will be returned. This allows an attacker to send an encrypted message to different recipients, each receiving different keys, which will decrypt to different texts.
 
 
-This works because the two decrypted plaintext both contains two representations 
+This works because the two decrypted plaintexts both contains two representations 
 of packets. The plaintexts agree on the size and location of the packets, but 
 disagree on their type. Apart 
 from the packet header, the Marker-packets in both cases contain random garbage 
