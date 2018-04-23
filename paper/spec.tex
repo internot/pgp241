@@ -24,6 +24,8 @@
 }
 \makeatother
 
+\newcommand{\todo}[1]{\textbf{\color{blue}TODO: #1}}
+
 \definecolor{linkcolor}{rgb}{0,0,1}
 \definecolor{citecolor}{rgb}{0,0,1}
 \definecolor{urlcolor}{rgb}{0,0,1}
@@ -57,23 +59,34 @@ This is intro!
 \section{Background}\label{sec:background}
 
 
-\section{OpenPGP}\label{sec:openpgp}
+\section{The OpenPGP message format}\label{sec:openpgp}
 
+A PGP message consists of a set of packets. Each packet has a header consisting 
+of a one byte tag and a variable
+number of bytes describing the total size of the packet. Five kinds of
+packets are of particular interest for this article, Literal,
+Compressed, Symmetrically Encrypted (SE), Symmetrically Encrypted
+Integrity Protected (SEIP), and Modification Detection Code (MDC)
+packets. For a complete description of the PGP message format the
+reader is referred to the PGP standard documentation, RFC4880.
+
+The OpenPGP message format is specified and refined in RFCs 1991,
+2440, and finally standardised in RFC
+4880~\cite{callas1998rfc,callas2007openpgp}.
+
+Of particular interest are symmetrically encrypted packets, both with
+and without integrity protection.
 
 \subsection{CFB mode}
 
-
-
-\subsubsection{OpenPGP CFB mode}
-
-OpenPGP implements CFB mode slightly differently compared to standard 
-CFB mode. Instead of encrypting an IV and XOR it with the first block 
-of plaintext a block of zeroes is encrypted and XORed with a random 
-number, acting as an IV.
+In standard CFB mode, the first block of plaintext is XOR:ed with the encrypted 
+IV. All consecutive plaintext blocks are XOR:ed with the ciphertext of the 
+previous block.
 
 $
-C_1 = E(0) \oplus R \\
-|C_2|_{a}
+\\
+C_1 = E_K(IV) \oplus P_1 \\
+C_i = E_K(C_{i-1}) \oplus P_i \forall i = 2 ... n
 $
 
 
@@ -88,7 +101,7 @@ will again be abused in Section X, to attack the PGP message format.
 
 
 \paragraph{Property 1} The ciphertext will have the exact length of
-the ciphertext and vice versa. A modification of the length of the
+the plaintext and vice versa. A modification of the length of the
 ciphertext will cause the same effect on the plaintext. Any number of
 bytes cut off the end of the ciphertext will cut the same amount of
 bytes from the plaintext.
@@ -96,7 +109,7 @@ bytes from the plaintext.
 \paragraph{Property 2} The decryption of a block depends only on the
 preceding block, regardless of where in the ciphertext it
 appears. Blocks can also be injected amidst two blocks, affecting only
-the first and last block of the injected sequence. As a result, any
+the first block of the injected sequence and the following block after the sequence. As a result, any
 sequence of ciphertext blocks can be cut, duplicated or moved between
 blocks in the ciphertext, and still produce the same plaintext. The
 decrypted output of the first block of the two and the block following
@@ -116,32 +129,41 @@ the following block to be scrambled. If the modified block is the last
 block of the sequence, there will be no block to scramble.
 
 
-\subsection{The OpenPGP message format}
+\subsection{OpenPGP CFB mode}
 
-A PGP message consists of a set of packets. Each packet has a header consisting 
-of a one byte tag and a variable
-number of bytes describing the total size of the packet. Five kinds of
-packets are of particular interest for this article, Literal,
-Compressed, Symmetrically Encrypted (SE), Symmetrically Encrypted
-Integrity Protected (SEIP), and Modification Detection Code (MDC)
-packets. For a complete description of the PGP message format the
-reader is referred to the PGP standard documentation, RFC4880.
+OpenPGP implements CFB mode slightly differently compared to standard 
+CFB mode \todo{Reference to RFC4880 Section 13.9}. There is also a slight difference in how an "Symmetrically 
+Encrypted"-packet is encrypted compared to a "Symmetrically Encrypted Integrity 
+Protected"-packet. For the purpose of this paper we will use the "Symmetrically 
+Encrypted"-packet, and will therefore not go into the details of these 
+differences.
 
-The OpenPGP message format is specified and refined in RFCs 1991,
-2440, and finally standardised in RFC
-4880~\cite{callas1998rfc,callas2007openpgp}.
 
-Of particular interest are symmetrically encrypted packets, both with
-and without integrity protection.
+Instead of encrypting an IV, the first block of ciphertext is formed of an block of zeroes is encrypted and XORed with a random 
+number the size of a block, acting as an IV. Then the first block of ciphertext $C_{IV}$ is encrypted and the two first bytes of the output is XOR:ed with the two last bytes of the IV repeated, to form an IV "quick check". The encryption is then "resynced"
+
+$
+\\
+C_{IV} = E_K(0) \oplus R \\
+|C_{Check}|_{[1,2]} = |E_K(C_{IV})|_{[1,2]} \oplus |R|_{[15,16]} \\
+C_1 = E_K(|C_{IV}|_{[3-16]}~~||~~|C_{Check}|_{[1,2]}) \oplus P_1 \\
+C_i = E_K(C_{i-1}) \oplus P_i,~~\forall i = 2 ... n
+$
 
 
 \section{Two for one}\label{sec:twoforone}
 
-The "Two for One" attack merges two messages, encrypted with different session keys, 
+The "Two for One" attack merges two messages, encrypted with different session 
+keys, 
 into a single ciphertext. The plaintext, when decrypted with the first key, 
-corresponds to a Literal-packet followed by a Marker-packet. When decrypted with the second 
+corresponds to a Literal-packet followed by a Marker-packet. When decrypted with 
+the second 
 key, the first packet is the Marker-packet and the second the Literal packet. 
-Since, upon decryption, the Marker-packet will be ignored, only the contents of the Literal-packet will be returned. This allows an attacker to send an encrypted message to different recipients, each receiving different keys, which will decrypt to different texts.
+Since, upon decryption, the Marker-packet will be ignored, only the contents of 
+the Literal-packet will be returned. This allows an attacker to send an 
+encrypted message to different recipients, each receiving different keys, which 
+will decrypt to different texts.
+
 
 
 This works because the two decrypted plaintexts both contains two representations 
@@ -150,10 +172,41 @@ disagree on their type. Apart
 from the packet header, the Marker-packets in both cases contain random garbage 
 data. 
 
+\subsection{Conditions}\label{sec:conditions}
+
+Two conditions need to be met in order for the 
+
+\paragraph{Quick-check bytes}
+The last two bytes of the IV is repeated to form two "quick check" bytes. When 
+decrypting, the two bytes must match or else the decryption fails. In the 
+two-for-one scenario this means that we need to find two keys that generate output such that:
+
+$E_{K_1}(0)_{[15,16]} \oplus E_{K_1}(C_{IV})_{[1,2]} \equiv E_{K_2}(0)_{[15,16]} 
+\oplus E_{K_2}(C_{IV})_{[1,2]}$
+
+
+\paragraph{Packet headers}
+
+The output of the Packet headers must be valid and match two conditions. The 
+types must be 
+
+\subsection{In practice}\label{sec:in-practice}
+
+Because the first ciphertext block is the XOR between the outputs $E_{K_i}(0)$ 
+and random IVs, the ciphertext for the first block can be chosen at will. 
+
+
 Steps:
-1. Pick a ciphertext for the first block.
-2. Find two keys that encrypts that cipher text such that the output fulfil the quick check constraint.
-3.
+\begin{enumerate}
+
+	\item 1. select a ciphertext for the first block $C_{IV}$.
+	\item 2. Randomly generate a key $K_i$ and compute $E_{K_i}$
+3. Store $K_i$ 
+4. Check if store contains a $K_j$ that fulfils the conditions.
+
+\end{enumerate}
+Once a matching $C_{IV}$, $K_i$ and $K_j$
+
 
 \section{Conclusion}\label{sec:conclusion}
 Well, wasn't this awesome!
